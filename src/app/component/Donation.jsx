@@ -1,10 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
-import { X, Heart, CreditCard, Building2, Loader } from "lucide-react";
-import axios from "axios";
 
-const DonationForm = () => {
+import React, { useState } from "react";
+import { X, Heart, CreditCard, Building2, Loader, Receipt } from "lucide-react";
+import axios from "axios";
+import { jsxs } from "react/jsx-runtime";
+
+const DonationForm =  () => {
   const [selectedAmount, setSelectedAmount] = useState(null);
   const [customAmount, setCustomAmount] = useState("");
   const [showPopup, setShowPopup] = useState(false);
@@ -96,30 +98,140 @@ const DonationForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
-    console.log("=== DONATION FORM SUBMISSION STARTED ===");
-
-    // Log form validation
-    console.log("Validating form...");
-    if (!validateForm()) {
-      console.log("❌ Form validation failed");
-      return;
+  const initiateRazorpayPayment = async () => {
+    const amount = selectedAmount || parseFloat(customAmount);
+    if (!amount || isNaN(amount) || amount <= 0) {
+      toast.error("Please enter a valid donation amount.");
+      return false;
     }
-    console.log("✅ Form validation passed");
 
+    const payload = {
+      amount: amount * 100,
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`,
+    };
+
+    try {
+      const response = await fetch("/api/create-razorpay-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        toast.error(`Error: ${errorData.message}`);
+        setIsLoading(false);
+        return false;
+      }
+
+      const { order } = await response.json();
+      console.log(order)
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID, 
+        amount: order.amount,
+        currency: order.currency,
+        name: "Donation",
+        description: "Donation for the cause",
+        order_id: order.id,
+        handler: async function (response) {
+          const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = response;
+
+          try {
+            const verificationResponse = await fetch("/api/verify-payment", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ razorpay_order_id, razorpay_payment_id, razorpay_signature }),
+            });
+
+            if (!verificationResponse.ok) {
+              const errorData = await verificationResponse.json();
+              console.error("Payment verification failed:", errorData);
+              toast.error(`Payment verification failed: ${errorData.message}`);
+              setIsLoading(false);
+              return;
+            }
+
+            const verificationResult = await verificationResponse.json();
+            console.log("Payment verification successful:", verificationResult);
+
+            try {
+              console.log("Preparing data for donation API call...");
+              console.log(payload)
+              const requestData = {
+                amount: payload.amount / 100,
+                fullName: formData.name,
+                emailaddress: formData.email,
+                panCard: formData.panCard,
+                phonenumber: formData.mobile,
+                paymentMethod: "Online",
+                razorpay_order_id,
+                razorpay_payment_id,
+              };
+
+              console.log("Request data:", requestData);
+
+              const donationResponse = await fetch("/api/online-donation", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestData),
+              });
+
+              console.log("API response status:", donationResponse.status);
+
+              if (!donationResponse.ok) {
+                const errorData = await donationResponse.json();
+                console.error("Error details:", errorData);
+                setIsLoading(false);
+                return;
+              }
+
+              const donationResult = await donationResponse.json();
+              console.log("Donation API response data:", donationResult);
+
+              toast.success("Donation successful! Thank you for your support.");
+              router.push("/donation/success");
+              setIsLoading(false);
+            } catch (donationError) {
+              console.error("Failed to record donation:", donationError);
+              toast.error("Failed to record donation. Please try again.");
+              setIsLoading(false);
+            }
+          } catch (verificationError) {
+            console.error("Failed to verify payment:", verificationError);
+            toast.error("Payment verification failed. Please try again.");
+            setIsLoading(false);
+          }
+        },
+        prefill: {
+          name: formData.fullName,
+          email: formData.email,
+          contact: formData.phone,
+        },
+        notes: { address: "Razorpay Donation" },
+        theme: { color: "#FF0080" },
+      };
+
+
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      console.error("Error initiating Razorpay payment:", error);
+      toast.error("Failed to create Razorpay order. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
+
+  const handleSubmit = async () => {
     setIsLoading(true);
     console.log("Loading state set to true");
 
     try {
       // Log amount calculation
       const amount = selectedAmount || parseFloat(customAmount);
-      console.log("Amount Details:", {
-        selectedAmount,
-        customAmount,
-        finalAmount: amount,
-      });
-
-      // Log form data before processing
       console.log("Form Data Before Processing:", formData);
 
       // Create FormData object to match API expectations
@@ -133,111 +245,21 @@ const DonationForm = () => {
       formDataToSend.append("message", formData.message.trim());
       formDataToSend.append("paymentMode", paymentMode.trim());
 
-      // Log FormData contents (since FormData can't be directly logged)
-      console.log("FormData Contents:");
-      for (let [key, value] of formDataToSend.entries()) {
-        console.log(`  ${key}: "${value}"`);
-      }
-
-      // Log API request details
-      console.log("Making API request to /api/Donation");
-      console.log("Request headers:", {
-        "Content-Type": "multipart/form-data",
-      });
-
       if (paymentMode === "offline") {
         const response = await axios.post("/api/Donation", formDataToSend, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
         });
-      }else{
-        // initiateRazorPay
-      }
-
-
-      // Log response details
-      console.log("API Response Status:", response.status);
-      console.log("API Response Data:", response.data);
-
-      if (response.data.success) {
-        console.log("✅ Donation submission successful!");
-
-        const successMessage = `Thank you ${
-          formData.name
-        }! Your donation of ₹${amount.toLocaleString()} has been submitted successfully. Your contribution makes a difference!`;
-        console.log("Success message:", successMessage);
-        alert(successMessage);
-
-        // Log form reset process
-        console.log("Resetting form data...");
-
-        // Reset form
-        setSelectedAmount(null);
-        setCustomAmount("");
-        setFormData({
-          name: "",
-          email: "",
-          mobile: "",
-          panCard: "",
-          location: "",
-          message: "",
-          paymentMethod: "", // Note: This should probably be paymentMode for consistency
-        });
-        setShowPopup(false);
-        setErrors({});
-
-        console.log("Form reset completed");
-
-        // Payment mode handling
-        console.log("Payment Mode:", formData.paymentMode);
-
-        // Here you can redirect to payment gateway based on paymentMode
-        if (formData.paymentMode === "online") {
-          // Integrate with your payment gateway
-          console.log("🔄 Redirecting to payment gateway...");
-          // window.location.href = "payment-gateway-url";
-        } else {
-          console.log("📋 Offline payment instructions will be provided");
+        console.log(response);
+        if (response.data.sucesss) {
+          alert("Donation successfull");
         }
       } else {
-        console.log("❌ Donation submission failed - success flag is false");
-        console.log("Response data:", response.data);
-      }
-    } catch (error) {
-      console.error("=== DONATION SUBMISSION ERROR ===");
-      console.error("Error object:", error);
-
-      if (error.response) {
-        console.error("Error response status:", error.response.status);
-        console.error("Error response data:", error.response.data);
-        console.error("Error response headers:", error.response.headers);
-      } else if (error.request) {
-        console.error("No response received:", error.request);
-      } else {
-        console.error("Error setting up request:", error.message);
-      }
-
-      if (error.response?.data?.message) {
-        const errorMessage = `Error: ${error.response.data.message}`;
-        console.log("Showing error message:", errorMessage);
-        alert(errorMessage);
-      } else if (error.response?.data?.details) {
-        // Handle validation errors from backend
-        const validationMessage = `Validation Error: ${error.response.data.details.join(
-          ", "
-        )}`;
-        console.log("Showing validation error:", validationMessage);
-        alert(validationMessage);
-      } else {
-        const genericMessage = "Something went wrong. Please try again later.";
-        console.log("Showing generic error:", genericMessage);
-        alert(genericMessage);
+        initiateRazorpayPayment();
       }
     } finally {
-      console.log("Setting loading state to false");
       setIsLoading(false);
-      console.log("=== DONATION FORM SUBMISSION COMPLETED ===");
     }
   };
 
@@ -352,7 +374,7 @@ const DonationForm = () => {
                     value={formData.name}
                     onChange={handleInputChange}
                     required
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors ${
+                    className={`w-full px-4 py-3 text-black border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-colors ${
                       errors.name ? "border-red-500" : "border-gray-300"
                     }`}
                     placeholder="Enter your full name"
@@ -551,7 +573,7 @@ const DonationForm = () => {
                     disabled={isLoading}
                     className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all duration-200 font-medium transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center"
                   >
-                    {isLoading ? (
+                    {isLoading  ? (
                       <>
                         <Loader className="w-4 h-4 mr-2 animate-spin" />
                         Processing...

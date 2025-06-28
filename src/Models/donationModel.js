@@ -23,7 +23,7 @@ const donationSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ["online", "offline"],
+      enum: ["Online", "offline"],
       required: [true, "Payment method is required"],
     },
     panCard: {
@@ -39,6 +39,12 @@ const donationSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    razorpay_order_id: {
+      type : String,
+    },
+    razorpay_payment_id: {
+      type : String,
+    }
   },
   {
     timestamps: true, // adds createdAt and updatedAt fields
