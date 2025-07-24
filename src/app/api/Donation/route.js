@@ -1,3 +1,4 @@
+import DonationEmail from "@/emails/donationEmail";
 import { dbConnect } from "@/lib/dbConnect";
 import donationModel from "@/Models/donationModel";
 import { NextResponse } from "next/server";
@@ -19,12 +20,6 @@ export async function POST(req) {
     const message = formData.get("message");
     const paymentMethod = formData.get("paymentMode");
 
-
-
-
-
-
-
     console.log(name);
     console.log(email);
     console.log(mobile);
@@ -32,10 +27,19 @@ export async function POST(req) {
     console.log(location);
     console.log(amount);
     console.log(paymentMethod);
-    console.log(message)
+    console.log(message);
 
     // Validate required fields
-    if (!name || !email || !mobile || !panCard || !location  || !amount  || !paymentMethod  || !message) {
+    if (
+      !name ||
+      !email ||
+      !mobile ||
+      !panCard ||
+      !location ||
+      !amount ||
+      !paymentMethod ||
+      !message
+    ) {
       return NextResponse.json(
         {
           message:
@@ -44,8 +48,6 @@ export async function POST(req) {
         { status: 400 }
       );
     }
-
-   
 
     // Create new user
     const newUser = new donationModel({
@@ -61,7 +63,13 @@ export async function POST(req) {
 
     const savedUser = await newUser.save();
 
-   
+    console.log("Email is sending", name);
+    const emailResponse = await resend.emails.send({
+      from: "no-reply@triptishakya.space",
+      to: email,
+      subject: "Thank you for contacting",
+      react: <DonationEmail name={name} />,
+    });
 
     const response = NextResponse.json(
       {
@@ -77,14 +85,10 @@ export async function POST(req) {
           panCard: savedUser.panCard,
           message: savedUser.message,
           paymentMethod: savedUser.paymentMethod,
-
-
         },
       },
       { status: 201 }
     );
-
- 
 
     return response;
   } catch (error) {
