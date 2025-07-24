@@ -28,7 +28,7 @@ export default function DonationEmail({ name, donationAmount }) {
             </Text>
 
             <Text className="mb-4">
-              Your contribution helps us continue our mission and support those in need. We're truly grateful for your support.
+              Your contribution helps us continue our mission and support those in need. We&apos;re truly grateful for your support.
             </Text>
 
             <Hr className="my-4 border-gray-300" />
