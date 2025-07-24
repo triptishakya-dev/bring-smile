@@ -1,11 +1,12 @@
 import React from "react";
 import Navbar from "./component/Navbar";
-import Footer from "./component/footer";
+
 import HeroSection from "./component/HeroSection";
 import BlogSection from "./component/BlogSection";
 import CampaignSection from "./component/Campaign";
 import FAQSection from "./component/FAQSection";
 import DonationForm from "./component/Donation";
+import Footer from "./component/Footer";
 
 const page = () => {
   return (
@@ -16,7 +17,8 @@ const page = () => {
       <CampaignSection />
       <FAQSection />
       <BlogSection />
-      <Footer />
+      <Footer/>
+    
     </div>
   );
 };
